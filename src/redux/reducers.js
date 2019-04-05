@@ -13,7 +13,6 @@ import isWalletEmpty from './isWalletEmpty';
 import navigation from './navigation';
 import initialFetch from './initialFetch';
 import nonce from './nonce';
-import tracking from './tracking';
 import transactionsToApprove from './transactionsToApprove';
 import walletconnect from './walletconnect';
 
@@ -28,7 +27,6 @@ export default combineReducers({
   prices,
   send,
   settings,
-  tracking,
   transactions,
   transactionsToApprove,
   walletconnect,

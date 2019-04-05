@@ -28,15 +28,6 @@ const ProfileScreen = ({
   transactionsCount,
 }) => (
   <Page component={FlexItem} style={position.sizeAsObject('100%')}>
-    {showBlur && (
-      <FadeInAnimation duration={200} style={{ ...position.coverAsObject, zIndex: 1 }}>
-        <BlurOverlay
-          backgroundColor={colors.alpha(colors.blueGreyDarker, 0.4)}
-          blurType="light"
-          opacity={blurOpacity}
-        />
-      </FadeInAnimation>
-    )}
     <Header justify="space-between">
       <HeaderButton onPress={onPressSettings}>
         <Icon name="gear" />
@@ -63,6 +54,15 @@ const ProfileScreen = ({
       transactionsCount={transactionsCount}
     />
     {isEmpty && <AddFundsInterstitial />}
+    {showBlur && (
+      <FadeInAnimation duration={200} style={{ ...position.coverAsObject, zIndex: 1 }}>
+        <BlurOverlay
+          backgroundColor={colors.alpha(colors.blueGreyDarker, 0.4)}
+          blurType="light"
+          opacity={blurOpacity}
+        />
+      </FadeInAnimation>
+    )}
   </Page>
 );
 

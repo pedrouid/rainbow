@@ -11,7 +11,6 @@ import {
   withIsWalletEmpty,
   withRequests,
   withAccountSettings,
-  withTrackingScreen,
 } from '../hoc';
 import ProfileScreen from './ProfileScreen';
 import witAreTransactionsFetched from '../hoc/withAreTransactionsFetched';
@@ -29,7 +28,6 @@ export default compose(
     onPressBackButton: ({ navigation }) => () => navigation.navigate('WalletScreen'),
     onPressSettings: ({ navigation }) => () => navigation.navigate('SettingsModal'),
   }),
-  withTrackingScreen,
   withProps(({ isWalletEmpty, transactionsCount, areTransactionsFetched }) => ({
     isEmpty: isWalletEmpty && !transactionsCount,
     showSpinner: !areTransactionsFetched && !isWalletEmpty,
