@@ -4,6 +4,7 @@ import {
   send,
   settings,
   transactions,
+  uniswap,
 } from '@rainbow-me/rainbow-common';
 import { combineReducers } from 'redux';
 
@@ -27,5 +28,6 @@ export default combineReducers({
   settings,
   transactions,
   transactionsToApprove,
+  uniswap,
   walletconnect,
 });

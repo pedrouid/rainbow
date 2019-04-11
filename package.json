@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "start": "node node_modules/react-native/local-cli/cli.js start",
-    "test": "jest",
+    "test": "jest test.js",
     "install-pods": "cd ios && pod install && cd ..",
     "ios": "react-native run-ios --simulator='iPhone X'",
     "lint": "eslint './**/*.js'",
@@ -15,7 +15,7 @@
     "@hocs/omit-props": "^0.4.0",
     "@hocs/safe-timers": "^0.4.0",
     "@hocs/with-view-layout-props": "^0.2.0",
-    "@rainbow-me/rainbow-common": "^0.6.43",
+    "@rainbow-me/rainbow-common": "git+https://github.com/rainbow-me/rainbow-common.git#uniswap",
     "@react-native-community/async-storage": "^1.2.2",
     "@react-native-community/netinfo": "^2.0.0",
     "@tradle/react-native-http": "^2.0.0",
@@ -115,12 +115,12 @@
     "vm-browserify": "0.0.4"
   },
   "devDependencies": {
-    "@babel/core": "^7.4.0",
+    "@babel/core": "^7.4.3",
     "@babel/runtime": "^7.4.2",
     "@react-native-community/eslint-config": "^0.0.3",
     "babel-core": "7.0.0-bridge.0",
     "babel-eslint": "^8.2.2",
-    "babel-jest": "^24.5.0",
+    "babel-jest": "^24.7.1",
     "babel-plugin-date-fns": "^0.2.1",
     "babel-plugin-lodash": "^3.3.4",
     "babel-plugin-styled-components": "^1.9.2",
