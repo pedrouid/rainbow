@@ -1,80 +1,87 @@
-import { createSwitchNavigator, createStackNavigator } from 'react-navigation';
-import createSwipeNavigator from '../navigation/navigators/createSwipeNavigator';
-import sheetTransition from '../navigation/transitions/sheet';
-import ActivityScreen from './ActivityScreen';
-import IntroScreen from './IntroScreen';
-import LoadingScreen from './LoadingScreen';
+import {
+  createAppContainer,
+  createMaterialTopTabNavigator,
+  createStackNavigator,
+} from 'react-navigation';
+import Navigation from '../navigation';
+import { buildTransitions, expanded, sheet } from '../navigation/transitions';
+import { updateTransitionProps } from '../redux/navigation';
+import store from '../redux/store';
+import { deviceUtils } from '../utils';
+import ExpandedAssetScreen from './ExpandedAssetScreen';
+import ImportSeedPhraseSheetWithData from './ImportSeedPhraseSheetWithData';
+import ProfileScreenWithData from './ProfileScreenWithData';
 import QRScannerScreenWithData from './QRScannerScreenWithData';
-import SendScreenWithData from './SendScreenWithData';
-import SettingsScreenWithData from './SettingsScreenWithData';
+import ReceiveModal from './ReceiveModal';
+// import ExamplePage from './ExamplePage';
+import SendSheetWithData from './SendSheetWithData';
+import SettingsModal from './SettingsModal';
 import TransactionConfirmationScreenWithData from './TransactionConfirmationScreenWithData';
 import WalletScreen from './WalletScreen';
 
-import Navigation from '../navigation';
+const onTransitionEnd = () => store.dispatch(updateTransitionProps({ isTransitioning: false }));
+const onTransitionStart = () => store.dispatch(updateTransitionProps({ isTransitioning: true }));
 
-const SwipeStack = createSwipeNavigator({
-  SettingsScreen: {
-    name: 'SettingsScreen',
-    screen: SettingsScreenWithData,
-    statusBarColor: 'dark-content',
+const SwipeStack = createMaterialTopTabNavigator({
+  ProfileScreen: {
+    name: 'ProfileScreen',
+    screen: ProfileScreenWithData,
   },
   WalletScreen: {
     name: 'WalletScreen',
     screen: WalletScreen,
-    statusBarColor: 'dark-content',
   },
+  // eslint-disable-next-line sort-keys
   QRScannerScreen: {
     name: 'QRScannerScreen',
     screen: QRScannerScreenWithData,
-    statusBarColor: 'light-content',
   },
 }, {
   headerMode: 'none',
   initialRouteName: 'WalletScreen',
-  onSwipeStart: () => Navigation.pauseNavigationActions(),
-  onSwipeEnd: (navigation) => Navigation.resumeNavigationActions(navigation),
+  mode: 'modal',
+  tabBarComponent: null,
 });
 
-const AppStack = createStackNavigator({
-  ActivityScreen: {
+const MainNavigator = createStackNavigator({
+  ConfirmRequest: TransactionConfirmationScreenWithData,
+  // ExamplePage: ExamplePage,
+  ExpandedAssetScreen: {
     navigationOptions: {
-      gesturesEnabled: false,
-      effect: 'sheet',
+      effect: 'expanded',
+      gestureResponseDistance: {
+        vertical: deviceUtils.dimensions.height,
+      },
     },
-    screen: ActivityScreen,
+    screen: ExpandedAssetScreen,
   },
-  ConfirmTransaction: TransactionConfirmationScreenWithData,
-  SendScreen: {
+  ImportSeedPhraseSheet: ImportSeedPhraseSheetWithData,
+  ReceiveModal: {
     navigationOptions: {
-      effect: 'sheet',
+      effect: 'expanded',
+      gestureResponseDistance: {
+        vertical: deviceUtils.dimensions.height,
+      },
     },
-    screen: SendScreenWithData,
+    screen: ReceiveModal,
+  },
+  SendSheet: SendSheetWithData,
+  SettingsModal: {
+    navigationOptions: {
+      effect: 'expanded',
+      gesturesEnabled: false,
+    },
+    screen: SettingsModal,
   },
   SwipeLayout: SwipeStack,
 }, {
   headerMode: 'none',
   initialRouteName: 'SwipeLayout',
   mode: 'modal',
-  transitionConfig: sheetTransition,
+  onTransitionEnd,
+  onTransitionStart,
+  transitionConfig: buildTransitions(Navigation, { expanded, sheet }),
+  transparentCard: true,
 });
 
-const IntroStack = createStackNavigator({
-  IntroScreen,
-}, {
-  headerMode: 'none',
-  mode: 'card', // Horizontal gestures
-});
-
-export default createSwitchNavigator(
-  {
-    App: AppStack,
-    Intro: IntroStack,
-    Loading: LoadingScreen,
-  },
-  {
-    headerMode: 'none',
-    initialRouteName: 'Loading',
-    mode: 'modal',
-  },
-);
-
+export default createAppContainer(MainNavigator);

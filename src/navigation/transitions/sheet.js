@@ -1,15 +1,35 @@
-import { Animated, Easing } from 'react-native';
 import { get } from 'lodash';
-import { isIphoneX } from 'react-native-iphone-x-helper';
-import { deviceUtils, safeAreaInsetValues } from '../../utils';
+import { Animated } from 'react-native';
+import { getStatusBarHeight, isIphoneX } from 'react-native-iphone-x-helper';
+import { updateTransitionProps } from '../../redux/navigation';
+import store from '../../redux/store';
+import { colors } from '../../styles';
+import { deviceUtils, statusBar } from '../../utils';
 
-export default function sheet(transitionProps, prevTransitionProps) {
+const distanceFromTop = 14;
+const statusBarHeight = getStatusBarHeight(true);
+
+export const sheetVerticalOffset = distanceFromTop + statusBarHeight;
+export const transitionName = 'sheet';
+
+export default function sheet(navigation, transitionProps, prevTransitionProps) {
+  const nextEffect = get(transitionProps, 'scene.descriptor.options.effect');
+  const prevEffect = get(prevTransitionProps, 'scene.descriptor.options.effect');
+  const nextIndex = get(transitionProps, 'index');
+  const prevIndex = get(prevTransitionProps, 'index', nextIndex - 1);
+
+  if (nextEffect === transitionName) {
+    statusBar.setBarStyle('light-content', true);
+  }
+
+  if (prevEffect === transitionName) {
+    statusBar.setBarStyle('dark-content', true);
+  }
+
   return {
-    transitionSpec: {
-      timing: Animated.spring,
-      tension: 62,
-      friction: 10,
-      useNativeDriver: true,
+    containerStyle: {
+      backgroundColor: colors.black,
+      opacity: 1,
     },
     screenInterpolator: (sceneProps = {}) => {
       const {
@@ -18,21 +38,20 @@ export default function sheet(transitionProps, prevTransitionProps) {
         scene,
       } = sceneProps;
 
+      store.dispatch(updateTransitionProps({
+        effect: transitionName,
+        nextIndex,
+        position,
+        prevIndex,
+      }));
 
-      const nextEffect = get(transitionProps, 'scene.descriptor.options.effect');
-      const prevEffect = get(prevTransitionProps, 'scene.descriptor.options.effect');
-      const nextIndex = get(transitionProps, 'index');
-      const prevIndex = get(prevTransitionProps, 'index', nextIndex - 1);
-
-      const distanceFromTop = isIphoneX() ? 14 : 6;
-      const scaleEnd = 1 - ((safeAreaInsetValues.top + distanceFromTop) / deviceUtils.dimensions.height);
-      const heightEnd = safeAreaInsetValues.top + distanceFromTop;
+      const scaleEnd = 1 - ((statusBarHeight + (isIphoneX() ? distanceFromTop : 0)) / deviceUtils.dimensions.height);
+      const heightEnd = statusBarHeight + distanceFromTop;
       const borderRadiusEnd = 12;
-      const borderRadiusScaledEnd = 12 / (1 - ((safeAreaInsetValues.top + distanceFromTop) / deviceUtils.dimensions.height));
+      const borderRadiusScaledEnd = borderRadiusEnd / scaleEnd;
       const opacityEnd = 0.5;
 
-
-      if (nextEffect === 'sheet' && scene.index === prevIndex) {
+      if (nextEffect === transitionName && scene.index === prevIndex && nextIndex > prevIndex) {
         const translateY = position.interpolate({
           inputRange: [prevIndex, nextIndex],
           outputRange: [0, distanceFromTop],
@@ -54,10 +73,10 @@ export default function sheet(transitionProps, prevTransitionProps) {
         });
 
         return {
-          opacity,
-          overflow: 'hidden',
           borderTopLeftRadius: borderRadius,
           borderTopRightRadius: borderRadius,
+          opacity,
+          overflow: 'hidden',
           transform: [{
             translateY,
           }, {
@@ -67,7 +86,7 @@ export default function sheet(transitionProps, prevTransitionProps) {
         };
       }
 
-      if (nextEffect === 'sheet' && scene.index === nextIndex) {
+      if (nextEffect === transitionName && scene.index === nextIndex && nextIndex > prevIndex) {
         const height = layout.initHeight;
         const translateY = position.interpolate({
           inputRange: [prevIndex, nextIndex],
@@ -75,10 +94,10 @@ export default function sheet(transitionProps, prevTransitionProps) {
         });
 
         return {
-          overflow: 'hidden',
           borderTopLeftRadius: borderRadiusEnd,
           borderTopRightRadius: borderRadiusEnd,
           height: height - heightEnd,
+          overflow: 'hidden',
           transform: [{
             translateY,
           }],
@@ -86,7 +105,7 @@ export default function sheet(transitionProps, prevTransitionProps) {
         };
       }
 
-      if (prevEffect === 'sheet' && scene.index === nextIndex) {
+      if (prevEffect === transitionName && scene.index === nextIndex && nextIndex < prevIndex) {
         const opacity = position.interpolate({
           inputRange: [nextIndex, prevIndex],
           outputRange: [1, opacityEnd],
@@ -103,10 +122,10 @@ export default function sheet(transitionProps, prevTransitionProps) {
         });
 
         return {
-          opacity,
-          overflow: 'hidden',
           borderTopLeftRadius: borderRadius,
           borderTopRightRadius: borderRadius,
+          opacity,
+          overflow: 'hidden',
           transform: [{
             scale,
           }],
@@ -114,7 +133,7 @@ export default function sheet(transitionProps, prevTransitionProps) {
         };
       }
 
-      if (prevEffect === 'sheet' && scene.index === prevIndex) {
+      if (prevEffect === transitionName && scene.index === prevIndex && nextIndex < prevIndex) {
         const height = layout.initHeight;
         const translateY = position.interpolate({
           inputRange: [nextIndex, prevIndex],
@@ -122,14 +141,80 @@ export default function sheet(transitionProps, prevTransitionProps) {
         });
 
         return {
-          overflow: 'hidden',
           borderTopLeftRadius: borderRadiusEnd,
           borderTopRightRadius: borderRadiusEnd,
           height: height - heightEnd,
+          overflow: 'hidden',
           transform: [{
             translateY,
           }],
           zIndex: 2,
+        };
+      }
+
+      if ((prevEffect === transitionName && scene.index === prevIndex) || (nextEffect === transitionName && scene.index === nextIndex)) {
+        const height = layout.initHeight;
+        const width = layout.initWidth;
+        const translateX = position.interpolate({
+          inputRange: [scene.index - 1, scene.index],
+          outputRange: [width, 0],
+        });
+
+        return {
+          borderTopLeftRadius: borderRadiusEnd,
+          borderTopRightRadius: borderRadiusEnd,
+          height: height - heightEnd,
+          overflow: 'hidden',
+          transform: [{
+            translateX,
+          }, {
+            translateY: heightEnd,
+          }],
+          zIndex: 2,
+        };
+      }
+
+      if (nextEffect === transitionName && prevIndex > nextIndex && scene.index === nextIndex - 1) {
+        const width = layout.initWidth;
+        const translateX = position.interpolate({
+          inputRange: [nextIndex - 1, nextIndex],
+          outputRange: [width, 0],
+        });
+
+        return {
+          borderTopLeftRadius: borderRadiusEnd,
+          borderTopRightRadius: borderRadiusEnd,
+          opacity: opacityEnd,
+          overflow: 'hidden',
+          transform: [{
+            translateX,
+          }, {
+            translateY: distanceFromTop,
+          }, {
+            scale: scaleEnd,
+          }],
+        };
+      }
+
+      if (prevEffect === transitionName && prevIndex < nextIndex && scene.index === prevIndex - 1) {
+        const width = layout.initWidth;
+        const translateX = position.interpolate({
+          inputRange: [prevIndex - 1, prevIndex],
+          outputRange: [width, 0],
+        });
+
+        return {
+          borderTopLeftRadius: borderRadiusEnd,
+          borderTopRightRadius: borderRadiusEnd,
+          opacity: opacityEnd,
+          overflow: 'hidden',
+          transform: [{
+            translateX,
+          }, {
+            translateY: distanceFromTop,
+          }, {
+            scale: scaleEnd,
+          }],
         };
       }
 
@@ -145,6 +230,12 @@ export default function sheet(transitionProps, prevTransitionProps) {
           translateX,
         }],
       };
+    },
+    transitionSpec: {
+      friction: 9.8,
+      tension: 58,
+      timing: ((nextEffect === transitionName) && (nextIndex > prevIndex)) ? Animated.spring : Animated.timing,
+      useNativeDriver: true,
     },
   };
 }

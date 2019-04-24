@@ -1,13 +1,18 @@
-import { accountUpdateHasPendingTransaction, accountUpdateTransactions } from 'balance-common';
+import { transactionsAddNewTransaction } from '@rainbow-me/rainbow-common';
 import { connect } from 'react-redux';
 import { removeTransaction } from '../redux/transactionsToApprove';
+import { updateTransactionCountNonce } from '../redux/nonce';
 
-const mapStateToProps = ({ walletconnect: { walletConnectors } }) => ({
+const mapStateToProps = ({
+  walletconnect: { walletConnectors },
+  nonce: { transactionCountNonce },
+}) => ({
+  transactionCountNonce,
   walletConnectors,
 });
 
 export default Component => connect(mapStateToProps, {
-  accountUpdateHasPendingTransaction,
-  accountUpdateTransactions,
   removeTransaction,
+  transactionsAddNewTransaction,
+  updateTransactionCountNonce,
 })(Component);

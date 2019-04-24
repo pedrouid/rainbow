@@ -1,7 +1,8 @@
-import { InteractionManager } from 'react-native';
+import { Animated, InteractionManager } from 'react-native';
 
 const queuedNavigationActions = [];
 let isPaused = false;
+let transitionPosition = new Animated.Value(0);
 
 /**
  * Gets the current screen from navigation state
@@ -11,7 +12,9 @@ function getActiveRouteName(navigationState) {
 
   const route = navigationState.routes[navigationState.index];
   // recursively dive into nested navigators
-  if (route.routes) return getActiveRouteName(route);
+  if (route.routes) {
+    return getActiveRouteName(route);
+  }
   return route.routeName;
 }
 
@@ -54,9 +57,19 @@ function resumeNavigationActions(navigation) {
   }
 }
 
+function getTransitionPosition() {
+  return transitionPosition;
+}
+
+function setTransitionPosition(position) {
+  transitionPosition = position;
+}
+
 export default {
   getActiveRouteName,
+  getTransitionPosition,
   handleAction,
   pauseNavigationActions,
   resumeNavigationActions,
+  setTransitionPosition,
 };

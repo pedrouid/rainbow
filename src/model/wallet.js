@@ -1,10 +1,18 @@
-import ethers from 'ethers';
+import { ethers } from 'ethers';
 import lang from 'i18n-js';
-import * as keychain from '../model/keychain';
-const seedPhraseKey = 'seedPhrase';
-const privateKeyKey = 'privateKey';
-const addressKey = 'addressKey';
-import { ACCESS_CONTROL, ACCESSIBLE } from 'react-native-keychain';
+import { web3Provider } from '@rainbow-me/rainbow-common';
+import { Alert } from 'react-native';
+import {
+  ACCESS_CONTROL,
+  ACCESSIBLE,
+  AUTHENTICATION_TYPE,
+  canImplyAuthentication,
+} from 'react-native-keychain';
+import * as keychain from './keychain';
+
+const seedPhraseKey = 'rainbowSeedPhrase';
+const privateKeyKey = 'rainbowPrivateKey';
+const addressKey = 'rainbowAddressKey';
 
 export function generateSeedPhrase() {
   return ethers.HDNode.entropyToMnemonic(ethers.utils.randomBytes(16));
@@ -12,83 +20,115 @@ export function generateSeedPhrase() {
 
 export const walletInit = async (seedPhrase = null) => {
   let walletAddress = null;
-  try {
-    walletAddress = await loadAddress();
-    if (!walletAddress) {
-      walletAddress = await createWallet(seedPhrase);
-    }
-    return walletAddress;
-  } catch (error) {
-    return walletAddress;
+  let isWalletBrandNew = false;
+  if (seedPhrase) {
+    walletAddress = await createWallet(seedPhrase);
   }
+  if (!walletAddress) {
+    walletAddress = await loadAddress();
+  }
+  if (!walletAddress) {
+    walletAddress = await createWallet();
+    isWalletBrandNew = true;
+  }
+  return { isWalletBrandNew, walletAddress } ;
 };
 
-export const loadWallet = async (authenticationPrompt) => {
-  const privateKey = await loadPrivateKey(authenticationPrompt);
+export const loadWallet = async () => {
+  const privateKey = await loadPrivateKey();
   if (privateKey) {
-    const wallet = new ethers.Wallet(privateKey);
-    wallet.provider = ethers.providers.getDefaultProvider();
-    console.log(`Wallet: successfully loaded existing wallet with public address: ${wallet.address}`);
-    return wallet;
+    return new ethers.Wallet(privateKey, web3Provider);
   }
-  console.log("Wallet: failed to load existing wallet because the private key doesn't exist");
   return null;
 };
 
-export const createTransaction = async (to, data, value, gasLimit, gasPrice, nonce = null) => {
-  return {
-    to,
-    data,
-    value: ethers.utils.parseEther(value),
-    gasLimit,
-    gasPrice,
-    nonce,
-  };
+export const createTransaction = async (to, data, value, gasLimit, gasPrice, nonce = null) => ({
+  data,
+  gasLimit,
+  gasPrice,
+  nonce,
+  to,
+  value: ethers.utils.parseEther(value),
+});
+
+export const sendTransaction = async ({ transaction }) => {
+  try {
+    const wallet = await loadWallet();
+    if (!wallet) return null;
+    try {
+      const result = await wallet.sendTransaction(transaction);
+      return result.hash;
+    } catch (error) {
+      Alert.alert(lang.t('wallet.transaction.alert.failed_transaction'));
+      return null;
+    }
+  } catch (error) {
+    Alert.alert(lang.t('wallet.transaction.alert.authentication'));
+    return null;
+  }
 };
 
-export const sendTransaction = async (transaction, authenticationPrompt = lang.t('account.authenticate.please')) => {
-  const wallet = await loadWallet(authenticationPrompt);
-  const transactionResponse = await wallet.sendTransaction(transaction);
-  return transactionResponse.hash;
+export const signMessage = async (message, authenticationPrompt = lang.t('wallet.authenticate.please')) => {
+  try {
+    const wallet = await loadWallet(authenticationPrompt);
+    try {
+      return await wallet.signMessage(message);
+    } catch (error) {
+      Alert.alert(lang.t('wallet.message_signing.failed_signing'));
+      return null;
+    }
+  } catch (error) {
+    Alert.alert(lang.t('wallet.transaction.alert.authentication'));
+    return null;
+  }
 };
 
-export const loadSeedPhrase = async () => {
-  const authenticationPrompt = lang.t('account.authenticate.please_seed_phrase');
+export const loadSeedPhrase = async (authenticationPrompt = lang.t('wallet.authenticate.please_seed_phrase')) => {
   const seedPhrase = await keychain.loadString(seedPhraseKey, { authenticationPrompt });
   return seedPhrase;
 };
 
 export const loadAddress = async () => {
-  const privateKey = await keychain.loadString(addressKey);
-  return privateKey;
+  try {
+    return await keychain.loadString(addressKey);
+  } catch (error) {
+    return null;
+  }
 };
 
 const createWallet = async (seedPhrase) => {
   const walletSeedPhrase = seedPhrase || generateSeedPhrase();
   const wallet = ethers.Wallet.fromMnemonic(walletSeedPhrase);
-  wallet.provider = ethers.providers.getDefaultProvider();
-  saveSeedPhrase(walletSeedPhrase);
-  savePrivateKey(wallet.privateKey);
-  saveAddress(wallet.address);
-
-  console.log(`Wallet: Generated wallet with public address: ${wallet.address}`);
-
+  saveWalletDetails(walletSeedPhrase, wallet.privateKey, wallet.address);
   return wallet.address;
 };
 
-const saveSeedPhrase = async (seedPhrase) => {
-  const accessControlOptions = { accessControl: ACCESS_CONTROL.USER_PRESENCE, accessible: ACCESSIBLE.WHEN_UNLOCKED };
+const saveWalletDetails = async (seedPhrase, privateKey, address) => {
+  const canAuthenticate = await canImplyAuthentication({ authenticationType: AUTHENTICATION_TYPE.DEVICE_PASSCODE_OR_BIOMETRICS });
+  let accessControlOptions = {};
+  if (canAuthenticate) {
+    accessControlOptions = { accessControl: ACCESS_CONTROL.USER_PRESENCE, accessible: ACCESSIBLE.WHEN_UNLOCKED };
+  }
+  saveSeedPhrase(seedPhrase, accessControlOptions);
+  savePrivateKey(privateKey, accessControlOptions);
+  saveAddress(address);
+};
+
+const saveSeedPhrase = async (seedPhrase, accessControlOptions = {}) => {
   await keychain.saveString(seedPhraseKey, seedPhrase, accessControlOptions);
 };
 
-const savePrivateKey = async (privateKey) => {
-  const accessControlOptions = { accessControl: ACCESS_CONTROL.USER_PRESENCE, accessible: ACCESSIBLE.WHEN_UNLOCKED };
+const savePrivateKey = async (privateKey, accessControlOptions = {}) => {
   await keychain.saveString(privateKeyKey, privateKey, accessControlOptions);
 };
 
-const loadPrivateKey = async (authenticationPrompt) => {
-  const privateKey = await keychain.loadString(privateKeyKey, { authenticationPrompt });
-  return privateKey;
+const loadPrivateKey = async (authenticationPrompt = lang.t('wallet.authenticate.please')) => {
+  try {
+    const privateKey = await keychain.loadString(privateKeyKey, { authenticationPrompt });
+    return privateKey;
+  } catch (error) {
+    return null;
+  }
 };
 
 const saveAddress = async (address) => {

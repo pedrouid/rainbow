@@ -1,30 +1,31 @@
 import PropTypes from 'prop-types';
 import React, { createElement } from 'react';
-import { pure } from 'recompact';
+import {
+  compose,
+  pure,
+} from 'recompact';
 import styled from 'styled-components/primitives';
+import { withAccountSettings } from '../../hoc';
 import { colors, padding } from '../../styles';
 import { CoinIcon } from '../coin-icon';
 import { Column, Row } from '../layout';
-import { TouchableOpacity } from 'react-native';
 
 const CoinRowPaddingVertical = 12;
+export const CoinRowHeight = CoinIcon.size + (CoinRowPaddingVertical * 2);
 
 const Container = styled(Row)`
   ${padding(CoinRowPaddingVertical, 19, CoinRowPaddingVertical, 15)}
   background-color: ${colors.white};
   width: 100%;
-  ${({ containerStyles }) => containerStyles}
 `;
 
 const Content = styled(Column)`
   background-color: ${colors.white};
-  flex: 1;
   height: ${CoinIcon.size};
   margin-left: ${CoinRowPaddingVertical};
-  ${({ contentStyles }) => contentStyles}
 `;
 
-const CoinRow = pure(({
+const CoinRow = ({
   bottomRowRender,
   children,
   coinIconRender,
@@ -35,15 +36,9 @@ const CoinRow = pure(({
   topRowRender,
   ...props
 }) => (
-  <Container
-    component={TouchableOpacity}
-    align="center"
-    onPress={onPress}
-    activeOpacity={onPress ? 0.2 : 1}
-    style={containerStyles}
-  >
+  <Container align="center" css={containerStyles}>
     {createElement(coinIconRender, { symbol, ...props })}
-    <Content justify="space-between" styles={contentStyles}>
+    <Content flex={1} justify="space-between" css={contentStyles}>
       <Row align="center" justify="space-between">
         {topRowRender({ symbol, ...props })}
       </Row>
@@ -56,13 +51,13 @@ const CoinRow = pure(({
       : children
     }
   </Container>
-));
+);
 
 CoinRow.propTypes = {
   bottomRowRender: PropTypes.func,
-  coinIconRender: PropTypes.func,
   children: PropTypes.node,
-  containerStyles: PropTypes.string,
+  coinIconRender: PropTypes.func,
+  containerStyles: PropTypes.oneOfType([PropTypes.array, PropTypes.string]),
   contentStyles: PropTypes.string,
   onPress: PropTypes.func,
   symbol: PropTypes.string,
@@ -73,6 +68,7 @@ CoinRow.defaultProps = {
   coinIconRender: CoinIcon,
 };
 
-CoinRow.height = CoinIcon.size + (CoinRowPaddingVertical * 2);
-
-export default CoinRow;
+export default compose(
+  pure,
+  withAccountSettings,
+)(CoinRow);

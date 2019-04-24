@@ -1,66 +1,33 @@
-import { times } from 'lodash';
-import PropTypes from 'prop-types';
-import React from 'react';
 import lang from 'i18n-js';
-import { withNavigation } from 'react-navigation';
-import { compose, omitProps, withHandlers } from 'recompact';
-import styled from 'styled-components/primitives';
-import { colors, margin, position } from '../../styles';
-import { Button } from '../buttons';
-import Icon from '../icons/Icon';
+import { times } from 'lodash';
+import React from 'react';
+import { pure } from 'recompact';
+import { position } from '../../styles';
+import AddFundsInterstitial from '../AddFundsInterstitial';
+import { FabWrapper } from '../fab';
 import { Centered, Column } from '../layout';
 import AssetListHeader from './AssetListHeader';
+import AssetListItemSkeleton from './AssetListItemSkeleton';
 
-const ButtonContainer = styled(Centered)`
-  bottom: 28;
-  position: absolute;
-  width: 100%;
-`;
+const InterstitialOffset = AssetListHeader.height + FabWrapper.bottomPosition;
 
-const Container = styled(Column)`
-  ${position.size('100%')}
-`;
-
-const SkeletonElement = styled(Icon).attrs({ name: 'assetListItemSkeleton' })`
-  ${({ index }) => margin((index === 0 ? 15 : 12.5), 19, 12.5, 15)}
-  opacity: ${({ index }) => (1 - (0.2 * index))};
-`;
-
-const AssetListSkeleton = ({ onPressAddFunds, skeletonCount, ...props }) => (
-  <Container {...props}>
-    <AssetListHeader section={{ title: lang.t('account.tab_balances'), totalValue: '$0.00' }} />
-    <Column>
-      {times(skeletonCount, index => (
-        <SkeletonElement
-          index={index}
-          key={`SkeletonElement${index}`}
-        />
-      ))}
-      <ButtonContainer>
-        <Button
-          bgColor={colors.primaryBlue}
-          onPress={onPressAddFunds}
-        >
-          Add Funds
-        </Button>
-      </ButtonContainer>
-    </Column>
-  </Container>
+const renderSkeleton = index => (
+  <AssetListItemSkeleton
+    index={index}
+    key={`skeleton${index}`}
+  />
 );
 
-AssetListSkeleton.propTypes = {
-  onPressAddFunds: PropTypes.func,
-  skeletonCount: PropTypes.number,
-};
+const AssetListSkeleton = () => (
+  <Column style={position.sizeAsObject('100%')}>
+    <AssetListHeader title={lang.t('account.tab_balances')} />
+    <Centered flex={1}>
+      <Column style={position.coverAsObject}>
+        {times(5, renderSkeleton)}
+      </Column>
+      <AddFundsInterstitial offsetY={InterstitialOffset * -1} />
+    </Centered>
+  </Column>
+);
 
-AssetListSkeleton.defaultProps = {
-  skeletonCount: 5,
-};
-
-export default compose(
-  withNavigation,
-  withHandlers({
-    onPressAddFunds: ({ navigation }) => () => navigation.navigate('SettingsScreen'),
-  }),
-  omitProps('navigation'),
-)(AssetListSkeleton);
+export default pure(AssetListSkeleton);

@@ -1,4 +1,5 @@
 import React, { Component } from 'react';
+import { InteractionManager } from 'react-native';
 import Animated, { Easing } from 'react-native-reanimated';
 import { LongPressGestureHandler, State, TapGestureHandler } from 'react-native-gesture-handler';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
@@ -36,18 +37,40 @@ export default class LongPressButton extends Component {
   onTapHandlerStateChange = ({ nativeEvent }) => {
     const { disabled, onPress, onRelease } = this.props;
 
-    timing(this.scale, {
-      toValue: (!disabled && nativeEvent.state === State.BEGAN) ? 0.875 : 1,
-      duration: 150,
-      easing: Easing.inOut(Easing.ease),
-    }).start();
+    if (nativeEvent.state === State.BEGAN) {
+      if (disabled) {
+        ReactNativeHapticFeedback.trigger('notificationWarning');
 
-    console.log('here', nativeEvent)
+        timing(this.scale, {
+          duration: 150,
+          easing: Easing.inOut(Easing.ease),
+          toValue: 0.975,
+        }).start(() => {
+          timing(this.scale, {
+            toValue: 1,
+            duration: 150,
+            easing: Easing.inOut(Easing.ease),
+          }).start();
+        });
+      } else {
+        timing(this.scale, {
+          toValue: 0.875,
+          duration: 150,
+          easing: Easing.inOut(Easing.ease),
+        }).start();
 
-    if (!disabled && nativeEvent.state === State.BEGAN) {
-      onPress();
+        onPress();
+      }
     } else if (!disabled && nativeEvent.state === State.END) {
-      onRelease();
+      timing(this.scale, {
+        duration: 150,
+        easing: Easing.inOut(Easing.ease),
+        toValue: 1,
+      }).start();
+
+      InteractionManager.runAfterInteractions(() => {
+        onRelease();
+      });
     }
   };
 
@@ -57,7 +80,15 @@ export default class LongPressButton extends Component {
     if (!disabled && nativeEvent.state === State.ACTIVE) {
       ReactNativeHapticFeedback.trigger('impactHeavy');
 
-      onLongPress();
+      timing(this.scale, {
+        toValue: 1,
+        duration: 150,
+        easing: Easing.inOut(Easing.ease),
+      }).start(() => {
+        InteractionManager.runAfterInteractions(() => {
+          onLongPress();
+        });
+      });
     }
   };
 

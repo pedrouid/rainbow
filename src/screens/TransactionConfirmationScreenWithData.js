@@ -1,126 +1,156 @@
-import { get } from 'lodash';
-import React, { Component } from 'react';
-import { AlertIOS, StatusBar, Vibration } from 'react-native';
+import { ethers } from 'ethers';
 import lang from 'i18n-js';
-import { connect } from 'react-redux';
-import { compose, withHandlers, onlyUpdateForKeys } from 'recompact';
+import { get, isNil } from 'lodash';
 import PropTypes from 'prop-types';
+import { estimateGas, getTransactionCount, toHex } from '@rainbow-me/rainbow-common';
+import React, { Component } from 'react';
+import { Alert, StatusBar, Vibration } from 'react-native';
+import { withNavigationFocus } from 'react-navigation';
+import { compose } from 'recompact';
 import { withTransactionConfirmationScreen } from '../hoc';
-import { sendTransaction } from '../model/wallet';
-import { walletConnectSendTransactionHash } from '../model/walletconnect';
+import { signMessage, sendTransaction } from '../model/wallet';
+import { walletConnectSendStatus } from '../model/walletconnect';
 import TransactionConfirmationScreen from './TransactionConfirmationScreen';
 
 class TransactionConfirmationScreenWithData extends Component {
   static propTypes = {
-    accountUpdateHasPendingTransaction: PropTypes.func,
-    accountUpdateTransactions: PropTypes.func,
+    isFocused: PropTypes.bool.isRequired,
     navigation: PropTypes.any,
     removeTransaction: PropTypes.func,
+    transactionCountNonce: PropTypes.number,
+    transactionsAddNewTransaction: PropTypes.func,
+    updateTransactionCountNonce: PropTypes.func,
+    walletConnectors: PropTypes.object,
   }
 
   componentDidMount() {
     StatusBar.setBarStyle('light-content', true);
-    Vibration.vibrate();
+    const { autoOpened } = this.props.navigation.state.params;
+    if (autoOpened) {
+      Vibration.vibrate();
+    }
   }
 
-  handleConfirmTransaction = async () => {
-    try {
-      const { transactionDetails } = this.props.navigation.state.params;
-      const txPayload = transactionDetails.transactionPayload.data;
-      const transactionReceipt = await sendTransaction(txPayload, lang.t('wallet.transaction.confirm'));
+  handleConfirm = async (requestType) => {
+    if (requestType === 'message') {
+      return this.handleSignMessage();
+    }
+    return this.handleConfirmTransaction();
+  };
 
-      if (transactionReceipt && transactionReceipt.hash) {
-        const txDetails = {
-          asset: get(transactionDetails, 'transactionDisplayDetails.asset'),
-          from: get(transactionDetails, 'transactionDisplayDetails.from'),
-          gasLimit: get(transactionDetails, 'transactionDisplayDetails.gasLimit'),
-          gasPrice: get(transactionDetails, 'transactionDisplayDetails.gasPrice'),
-          hash: transactionReceipt.hash,
-          nonce: get(transactionDetails, 'transactionDisplayDetails.nonce'),
-          to: get(transactionDetails, 'transactionDisplayDetails.to'),
-          value: get(transactionDetails, 'transactionDisplayDetails.value'),
-        };
-        this.props.accountUpdateHasPendingTransaction();
-        this.props.accountUpdateTransactions(txDetails);
-        this.props.removeTransaction(transactionDetails.transactionId);
-        const walletConnector = this.props.walletConnectors[transactionDetails.sessionId];
-        await walletConnectSendTransactionHash(walletConnector, transactionDetails.transactionId, true, transactionReceipt.hash);
-        this.closeTransactionScreen();
-      } else {
-        await this.handleCancelTransaction();
+  handleConfirmTransaction = async () => {
+    const { transactionDetails } = this.props.navigation.state.params;
+    const txPayload = get(transactionDetails, 'callData.params[0]');
+    let gasLimit = txPayload.gasLimit;
+    if (isNil(gasLimit)) {
+      try {
+        rawGasLimit = await estimateGas(txPayload);
+        gasLimit = toHex(rawGasLimit);
+      } catch (error) {
+        console.log('error estimating gas', error);
       }
-    } catch (error) {
-      await this.sendFailedTransactionStatus();
-      AlertIOS.alert(lang.t('wallet.transaction.alert.authentication'));
+    }
+    const web3TxnCount = await getTransactionCount(txPayload.from);
+    const maxTxnCount = Math.max(this.props.transactionCountNonce, web3TxnCount);
+    const nonce = ethers.utils.hexlify(maxTxnCount);
+    const txPayloadLatestNonce = { ...txPayload, nonce };
+    const symbol = get(transactionDetails, 'transactionDisplayDetails.payload.asset.symbol', 'unknown');
+    const address = get(transactionDetails, 'transactionDisplayDetails.payload.asset.address', '');
+    const transactionHash = await sendTransaction({
+      transaction: txPayloadLatestNonce,
+    });
+
+    if (transactionHash) {
+      this.props.updateTransactionCountNonce(maxTxnCount + 1);
+      // TODO add request type
+      const txDetails = {
+        asset: get(transactionDetails, 'transactionDisplayDetails.payload.asset'),
+        dappName: get(transactionDetails, 'dappName'),
+        from: get(transactionDetails, 'transactionDisplayDetails.payload.from'),
+        gasLimit: get(transactionDetails, 'transactionDisplayDetails.payload.gasLimit'),
+        gasPrice: get(transactionDetails, 'transactionDisplayDetails.payload.gasPrice'),
+        hash: transactionHash,
+        nonce: get(transactionDetails, 'transactionDisplayDetails.payload.nonce'),
+        to: get(transactionDetails, 'transactionDisplayDetails.payload.to'),
+        value: get(transactionDetails, 'transactionDisplayDetails.payload.value'),
+      };
+      this.props.transactionsAddNewTransaction(txDetails);
+      this.props.removeTransaction(transactionDetails.callId);
+      const walletConnector = this.props.walletConnectors[transactionDetails.sessionId];
+      await walletConnectSendStatus(walletConnector, transactionDetails.callId, transactionHash);
+      this.closeScreen();
+    } else {
+      await this.handleCancelTransaction();
+    }
+  };
+
+  handleSignMessage = async () => {
+    const { transactionDetails } = this.props.navigation.state.params;
+    const message = get(transactionDetails, 'transactionDisplayDetails.payload');
+    const flatFormatSignature = await signMessage(message);
+
+    if (flatFormatSignature) {
+      this.props.removeTransaction(transactionDetails.callId);
+      const walletConnector = this.props.walletConnectors[transactionDetails.sessionId];
+      await walletConnectSendStatus(walletConnector, transactionDetails.callId, flatFormatSignature);
+      this.closeScreen();
+    } else {
+      await this.handleCancelSignMessage();
     }
   };
 
   sendFailedTransactionStatus = async () => {
     try {
+      this.closeScreen();
       const { transactionDetails } = this.props.navigation.state.params;
       const walletConnector = this.props.walletConnectors[transactionDetails.sessionId];
-      await walletConnectSendTransactionHash(walletConnector, transactionDetails.transactionId, false, null);
-      this.closeTransactionScreen();
+      await walletConnectSendStatus(walletConnector, transactionDetails.callId, null);
     } catch (error) {
-      this.closeTransactionScreen();
-      AlertIOS.alert(lang.t('wallet.transaction.alert.cancelled_transaction'));
+      this.closeScreen();
+      Alert.alert(lang.t('wallet.transaction.alert.cancelled_transaction'));
     }
   }
 
   handleCancelTransaction = async () => {
     try {
-      const { transactionDetails } = this.props.navigation.state.params;
-      this.props.removeTransaction(transactionDetails.transactionId);
       await this.sendFailedTransactionStatus();
+      const { transactionDetails } = this.props.navigation.state.params;
+      this.props.removeTransaction(transactionDetails.callId);
     } catch (error) {
-      this.closeTransactionScreen();
-      AlertIOS.alert('Failed to send rejected transaction status');
+      this.closeScreen();
+      Alert.alert('Failed to send rejected transaction status');
     }
   }
 
-  handleCancelTransaction = async () => {
-    try {
-      const { transactionDetails } = this.props.navigation.state.params;
-      this.props.removeTransaction(transactionDetails.transactionId);
-      await this.sendFailedTransactionStatus();
-    } catch (error) {
-      this.closeTransactionScreen();
-      AlertIOS.alert('Failed to send rejected transaction status');
-    }
-  }
-
-  closeTransactionScreen = () => {
+  closeScreen = () => {
     StatusBar.setBarStyle('dark-content', true);
     this.props.navigation.goBack();
   }
 
   render = () => {
-    const { transactionDetails } = this.props.navigation.state.params;
-    const { transactionDisplayDetails:
-      {
-        asset,
-        nativeAmount,
-        to,
-        value,
-      }
-    } = transactionDetails;
+    const {
+      transactionDetails: {
+        dappName,
+        transactionDisplayDetails: {
+          type,
+          payload,
+        },
+      },
+    } = this.props.navigation.state.params;
+
     return (
       <TransactionConfirmationScreen
-        asset={{
-          address: to,
-          amount: value || '0.00',
-          dappName: transactionDetails.dappName || '',
-          name: asset.name || 'No data',
-          nativeAmount: nativeAmount,
-          symbol: asset.symbol || 'N/A',
-        }}
+        dappName={dappName || ''}
+        request={payload}
+        requestType={type}
         onCancelTransaction={this.handleCancelTransaction}
-        onConfirmTransaction={this.handleConfirmTransaction}
+        onConfirm={this.handleConfirm}
       />
     );
   }
 }
 
 export default compose(
+  withNavigationFocus,
   withTransactionConfirmationScreen,
 )(TransactionConfirmationScreenWithData);
